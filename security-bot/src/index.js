@@ -169,7 +169,16 @@ async function retryWithBackoff(
 async function loadFalsePositives(prNumber) {
   try {
     const fpConfig = config.getFalsePositiveConfig();
-    if (!fpConfig.enabled) return;
+    logger.debug("False positive config:", {
+      enabled: fpConfig.enabled,
+      command: fpConfig.command,
+      require_approval: fpConfig.require_approval,
+    });
+
+    if (!fpConfig.enabled) {
+      logger.info("False positive handling is disabled");
+      return;
+    }
 
     const { data: comments } = await octokit.issues.listComments({
       owner: process.env.GITHUB_REPOSITORY.split("/")[0],
@@ -178,13 +187,27 @@ async function loadFalsePositives(prNumber) {
       per_page: 100,
     });
 
+    // Make the command pattern more robust
     const commandRegex = new RegExp(fpConfig.command + "\\s+(.+)$", "mi");
+
+    logger.debug("Loading false positives from comments:", {
+      totalComments: comments.length,
+      commandPattern: fpConfig.command,
+      regexPattern: commandRegex.toString(),
+    });
 
     for (const comment of comments) {
       const match = comment.body.match(commandRegex);
       if (match) {
         const issueId = match[1].trim();
         const fpKey = `${prNumber}-${issueId}`;
+
+        logger.debug("Found false positive command:", {
+          comment: comment.body,
+          issueId,
+          fpKey,
+          user: comment.user.login,
+        });
 
         if (fpConfig.require_approval) {
           const { data: user } = await octokit.users.get({
@@ -208,6 +231,11 @@ async function loadFalsePositives(prNumber) {
         logger.logFalsePositive(prNumber, issueId, comment.body);
       }
     }
+
+    logger.debug("Loaded false positives:", {
+      totalFalsePositives: falsePositives.size,
+      keys: Array.from(falsePositives.keys()),
+    });
   } catch (error) {
     logger.error("Error loading false positives:", error);
   }
@@ -797,7 +825,9 @@ async function processPullRequest(prNumber) {
   try {
     logger.logScanStart(prNumber);
 
+    logger.info("Starting to load false positives...");
     await loadFalsePositives(prNumber);
+    logger.info("Finished loading false positives");
 
     // Get the PR details first
     const { data: pr } = await retryWithBackoff(
@@ -880,7 +910,9 @@ async function processPullRequest(prNumber) {
       config.getApiTimeout()
     );
 
+    logger.info("Processing new comments for false positives...");
     await processNewComments(prNumber);
+    logger.info("Finished processing new comments");
 
     logger.logScanComplete(prNumber, vulnerabilities.length);
   } catch (error) {
