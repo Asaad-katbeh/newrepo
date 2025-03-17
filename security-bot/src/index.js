@@ -573,9 +573,22 @@ function extractField(text, fieldName) {
  * @returns {boolean} Whether the vulnerability is marked as false positive
  */
 function isFalsePositive(vulnerability, prNumber) {
-  const issueId = `${vulnerability.type} (${vulnerability.location})`;
+  // Extract file name from location (e.g., "server.js:15" -> "server.js")
+  const fileMatch = vulnerability.location.match(/^([^:]+)/);
+  if (!fileMatch) return false;
+  const fileName = fileMatch[1];
+
+  // Create a pattern that matches any line number for this file
+  const issueId = `${vulnerability.type} (${fileName}:\\d+)`;
   const fpKey = `${prNumber}-${issueId}`;
-  return falsePositives.has(fpKey);
+
+  // Check if any false positive matches this pattern
+  return Array.from(falsePositives.keys()).some((key) => {
+    const keyMatch = key.match(
+      new RegExp(`${prNumber}-${vulnerability.type} \\(${fileName}:\\d+\\)`)
+    );
+    return keyMatch !== null;
+  });
 }
 
 /**
@@ -590,7 +603,23 @@ async function handleFalsePositive(prNumber, issueId, comment) {
   const fpConfig = config.getFalsePositiveConfig();
   if (!fpConfig.enabled) return;
 
-  const fpKey = `${prNumber}-${issueId}`;
+  // Extract file name from issueId (e.g., "SQL Injection (server.js:15)" -> "server.js")
+  const fileMatch = issueId.match(/\(([^:]+):\d+\)$/);
+  if (!fileMatch) {
+    logger.warn("Invalid issueId format for false positive:", issueId);
+    return;
+  }
+  const fileName = fileMatch[1];
+
+  // Create a pattern that matches any line number for this file
+  const typeMatch = issueId.match(/^([^(]+)/);
+  if (!typeMatch) {
+    logger.warn("Could not extract vulnerability type from issueId:", issueId);
+    return;
+  }
+  const vulnerabilityType = typeMatch[1].trim();
+
+  const fpKey = `${prNumber}-${vulnerabilityType} (${fileName}:\\d+)`;
   falsePositives.set(fpKey, {
     timestamp: Date.now(),
     comment,
