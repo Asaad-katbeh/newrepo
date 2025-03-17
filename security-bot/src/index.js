@@ -288,6 +288,17 @@ async function analyzeCodeDiff(diff, prNumber) {
 
   const prompt = `You are a security expert analyzing code for vulnerabilities. Review the following code diff and identify any security issues.
 
+CRITICAL: FALSE POSITIVE HANDLING
+The following vulnerability types have been explicitly marked as false positives and MUST be completely ignored in your analysis, regardless of any other factors:
+${fpTypes.length > 0 ? fpTypes.map((type) => `- ${type}`).join("\n") : "None"}
+
+IMPORTANT: If you detect any of these vulnerability types, you MUST NOT report them, even if:
+- The confidence score is high
+- The vulnerability is clearly present
+- The code matches known patterns
+- The severity is critical
+- The vulnerability is in a different location
+
 Security Checks to Consider:
 ${Object.entries(securityChecks)
   .filter(([_, check]) => check.enabled)
@@ -302,9 +313,6 @@ ${Object.entries(securityChecks)
 `
   )
   .join("\n")}
-
-IMPORTANT: The following vulnerability types have been marked as false positives and should be COMPLETELY IGNORED in this analysis:
-${fpTypes.length > 0 ? fpTypes.map((type) => `- ${type}`).join("\n") : "None"}
 
 For each vulnerability found, provide the following information in a structured format:
 
@@ -322,8 +330,8 @@ Requirements:
 - Be specific about the location of each vulnerability
 - Provide actionable fix suggestions
 - If no vulnerabilities are found, explicitly state that
-- DO NOT report ANY vulnerabilities of the types listed above as false positives, regardless of location
 - Format the location as "file.js:line" (e.g., "server.js:15")
+- REMEMBER: Do not report ANY vulnerabilities that match the false positive types listed above
 
 Code diff to analyze:
 \`\`\`diff
