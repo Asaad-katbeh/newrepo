@@ -1,0 +1,217 @@
+# Security Review Bot Configuration
+# This configuration file controls the behavior of the automated security review bot
+
+# Core Settings
+# -------------
+# Minimum confidence score (0-1) required for a vulnerability to be reported
+confidence_threshold: 0.7
+
+# Maximum number of lines to analyze in a single file
+max_lines: 1000
+
+# Number of times to retry failed API calls
+max_retries: 3
+
+# Timeout for API calls in milliseconds (30 seconds)
+api_timeout: 30000
+
+# AI Model Settings
+# ----------------
+ai_model:
+  # The AI service provider to use for analysis
+  provider: "openai"
+
+  # The specific model to use for analysis
+  # gpt-4: More accurate but slower
+  # gpt-3.5-turbo: Faster but less accurate
+  model: "gpt-4"
+
+  # Controls randomness in AI responses
+  # Lower values (0.0-0.5) for more focused, consistent analysis
+  # Higher values (0.5-1.0) for more creative, varied analysis
+  temperature: 0.3
+
+  # Maximum length of AI response in tokens
+  max_tokens: 2000
+
+  # Instructions given to the AI model to guide its analysis
+  system_prompt: "You are a security expert analyzing code for vulnerabilities. Provide detailed, actionable feedback."
+
+# Security Check Definitions
+# ------------------------
+# Each check defines a specific type of vulnerability to look for
+security_checks:
+  # SQL Injection Detection
+  sql_injection:
+    enabled: true
+    severity: critical
+    description: "Detects potential SQL injection vulnerabilities"
+    owasp: "A03:2021" # OWASP Top 10 reference
+    cwe: "CWE-89" # Common Weakness Enumeration reference
+    confidence_threshold: 0.8 # Check-specific confidence threshold
+    patterns:
+      - "string concatenation in SQL queries"
+      - "raw SQL queries with user input"
+      - "dynamic SQL generation"
+
+  # Cross-Site Scripting (XSS) Detection
+  xss:
+    enabled: true
+    severity: high
+    description: "Detects Cross-Site Scripting vulnerabilities"
+    owasp: "A03:2021"
+    cwe: "CWE-79"
+    confidence_threshold: 0.8
+    patterns:
+      - "unencoded user input in HTML output"
+      - "innerHTML assignments"
+      - "document.write with user input"
+
+  # Hardcoded Secrets Detection
+  # Higher confidence threshold due to critical nature
+  hardcoded_secrets:
+    enabled: true
+    severity: high
+    description: "Detects hardcoded sensitive information"
+    owasp: "A02:2021"
+    cwe: "CWE-798"
+    confidence_threshold: 0.9
+    patterns:
+      - "API keys"
+      - "passwords"
+      - "tokens"
+      - "secrets"
+
+  # Weak Cryptography Detection
+  weak_crypto:
+    enabled: true
+    severity: high
+    description: "Detects weak cryptographic implementations"
+    owasp: "A02:2021"
+    cwe: "CWE-326"
+    confidence_threshold: 0.8
+    patterns:
+      - "MD5" # Cryptographically broken hash function
+      - "SHA1" # Deprecated hash function
+      - "DES" # Outdated encryption algorithm
+      - "RC4" # Deprecated stream cipher
+
+  # Authentication Bypass Detection
+  auth_bypass:
+    enabled: true
+    severity: critical
+    description: "Detects authentication bypass vulnerabilities"
+    owasp: "A07:2021"
+    cwe: "CWE-306"
+    confidence_threshold: 0.9
+    patterns:
+      - "missing authentication checks"
+      - "insecure session handling"
+      - "broken access control"
+
+  # Command Injection Detection
+  command_injection:
+    enabled: true
+    severity: critical
+    description: "Detects command injection vulnerabilities"
+    owasp: "A01:2021"
+    cwe: "CWE-78"
+    confidence_threshold: 0.9
+    patterns:
+      - "exec with user input"
+      - "spawn with user input"
+      - "shell commands with user input"
+
+  # Path Traversal Detection
+  path_traversal:
+    enabled: true
+    severity: high
+    description: "Detects path traversal vulnerabilities"
+    owasp: "A01:2021"
+    cwe: "CWE-22"
+    confidence_threshold: 0.8
+    patterns:
+      - "file operations with user input"
+      - "directory traversal patterns"
+      - "unsafe path resolution"
+
+  # Insecure Deserialization Detection
+  insecure_deserialization:
+    enabled: true
+    severity: critical
+    description: "Detects insecure deserialization vulnerabilities"
+    owasp: "A08:2021"
+    cwe: "CWE-502"
+    confidence_threshold: 0.9
+    patterns:
+      - "untrusted data deserialization"
+      - "pickle usage"
+      - "yaml.load with user input"
+
+# Severity Level Definitions
+# ------------------------
+# Defines how different severity levels are handled and displayed
+severity_levels:
+  # Critical: Immediate action required
+  critical:
+    enabled: true
+    threshold: 0.9 # Highest confidence required for critical issues
+    color: "#ff0000" # Red
+    description: "Critical security issues that must be addressed immediately"
+
+  # High: Urgent action needed
+  high:
+    enabled: true
+    threshold: 0.8
+    color: "#ff4500" # Orange-Red
+    description: "High severity issues that should be addressed soon"
+
+  # Medium: Important but not urgent
+  medium:
+    enabled: true
+    threshold: 0.7
+    color: "#ffa500" # Orange
+    description: "Medium severity issues that should be addressed"
+
+  # Low: Minor issues
+  low:
+    enabled: false # Low severity issues are disabled by default
+    threshold: 0.6
+    color: "#ffd700" # Gold
+    description: "Low severity issues that can be addressed later"
+
+# Logging Configuration
+# -------------------
+# Controls how the bot logs its activities
+logging:
+  level: debug # Log level (debug, info, warn, error)
+  file: security-bot.log # Log file name
+  max_size: 10485760 # Maximum log file size (10MB)
+  max_files: 5 # Number of log files to keep
+  include_metadata: true # Include additional context in logs
+  include_stack_traces: true # Include stack traces for errors
+  include_api_calls: true # Log API calls
+  include_vulnerability_details: true # Include full vulnerability details
+  include_false_positives: true # Track false positive reports
+
+# Performance Settings
+# ------------------
+# Controls the bot's resource usage and rate limits
+performance:
+  max_concurrent_requests: 5 # Maximum parallel API requests
+  request_timeout: 30000 # Request timeout in milliseconds
+  rate_limit:
+    requests: 100 # Number of requests allowed
+    window: 3600 # Time window in seconds (1 hour)
+
+# False Positive Management
+# -----------------------
+# Settings for handling false positive reports
+false_positives:
+  enabled: true
+  command: "@securitybot false-positive" # Command to mark false positives
+  storage: "comments" # Where to store false positive data
+  expiration: 30 # Days until false positive mark expires
+  require_approval: true # Require maintainer approval
+  track_history: true # Keep history of false positive marks
+  include_reason: true # Require explanation for false positive
