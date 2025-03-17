@@ -272,12 +272,23 @@ async function analyzeCodeDiff(diff, prNumber) {
   const severityLevels = config.getSeverityLevels();
   const confidenceThreshold = config.getConfidenceThreshold();
 
+  // Get existing false positives for this PR
+  const existingFalsePositives = Array.from(falsePositives.entries())
+    .filter(([key]) => key.startsWith(`${prNumber}-`))
+    .map(([key, value]) => ({
+      type: value.comment.match(/false-positive\s+(.+?)\s+\(/)?.[1],
+      location: value.comment.match(/\((.*?)\)/)?.[1],
+      description: value.comment.match(/Description:\s*(.*?)(?:\n|$)/)?.[1],
+    }))
+    .filter((fp) => fp.type && fp.location && fp.description);
+
   logger.debug("Starting code analysis with diff:", {
     diffLength: diff.length,
     confidenceThreshold,
     enabledChecks: Object.entries(securityChecks)
       .filter(([_, check]) => check.enabled)
       .map(([name, _]) => name),
+    existingFalsePositives,
   });
 
   const prompt = `You are a security expert analyzing code for vulnerabilities. Review the following code diff and identify any security issues.
@@ -293,6 +304,17 @@ ${Object.entries(securityChecks)
   - CWE: ${check.cwe}
   - Severity: ${check.severity}
   - Patterns: ${check.patterns ? check.patterns.join(", ") : "N/A"}
+`
+  )
+  .join("\n")}
+
+IMPORTANT: The following vulnerabilities have been marked as false positives and should NOT be reported:
+${existingFalsePositives
+  .map(
+    (fp) => `
+- Type: ${fp.type}
+  Location: ${fp.location}
+  Description: ${fp.description}
 `
   )
   .join("\n")}
@@ -313,8 +335,9 @@ Requirements:
 - Be specific about the location of each vulnerability
 - Provide actionable fix suggestions
 - If no vulnerabilities are found, explicitly state that
-- Do not report vulnerabilities that have been marked as false positives
+- DO NOT report any of the vulnerabilities listed above as false positives
 - Format the location as "file.js:line" (e.g., "server.js:15")
+- When marking a vulnerability as false positive, include the full description to ensure accurate identification
 
 Code diff to analyze:
 \`\`\`diff
@@ -564,7 +587,8 @@ function extractField(text, fieldName) {
  * @returns {boolean} Whether the vulnerability is marked as false positive
  */
 function isFalsePositive(vulnerability, prNumber) {
-  const issueId = `${vulnerability.type} (${vulnerability.location})`;
+  // Create a unique identifier based on vulnerability context
+  const issueId = `${vulnerability.type} (${vulnerability.location}) - ${vulnerability.description}`;
   const fpKey = `${prNumber}-${issueId}`;
   return falsePositives.has(fpKey);
 }
