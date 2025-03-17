@@ -272,8 +272,8 @@ async function analyzeCodeDiff(diff, prNumber) {
   const severityLevels = config.getSeverityLevels();
   const confidenceThreshold = config.getConfidenceThreshold();
 
-  // Get list of false positives for this PR
-  const fpList = Array.from(falsePositives.entries())
+  // Get list of false positive types for this PR
+  const fpTypes = Array.from(falsePositives.entries())
     .filter(([key]) => key.startsWith(`${prNumber}-`))
     .map(([key]) => key.replace(`${prNumber}-`, ""));
 
@@ -283,7 +283,7 @@ async function analyzeCodeDiff(diff, prNumber) {
     enabledChecks: Object.entries(securityChecks)
       .filter(([_, check]) => check.enabled)
       .map(([name, _]) => name),
-    falsePositives: fpList,
+    falsePositiveTypes: fpTypes,
   });
 
   const prompt = `You are a security expert analyzing code for vulnerabilities. Review the following code diff and identify any security issues.
@@ -303,8 +303,8 @@ ${Object.entries(securityChecks)
   )
   .join("\n")}
 
-IMPORTANT: The following vulnerabilities have been marked as false positives and should be ignored:
-${fpList.length > 0 ? fpList.map((fp) => `- ${fp}`).join("\n") : "None"}
+IMPORTANT: The following vulnerability types have been marked as false positives and should be COMPLETELY IGNORED in this analysis:
+${fpTypes.length > 0 ? fpTypes.map((type) => `- ${type}`).join("\n") : "None"}
 
 For each vulnerability found, provide the following information in a structured format:
 
@@ -322,7 +322,7 @@ Requirements:
 - Be specific about the location of each vulnerability
 - Provide actionable fix suggestions
 - If no vulnerabilities are found, explicitly state that
-- DO NOT report any of the vulnerabilities listed above as false positives
+- DO NOT report ANY vulnerabilities of the types listed above as false positives, regardless of location
 - Format the location as "file.js:line" (e.g., "server.js:15")
 
 Code diff to analyze:
@@ -567,34 +567,23 @@ function extractField(text, fieldName) {
 
 /**
  * @function isFalsePositive
- * @description Checks if a vulnerability has been marked as false positive
+ * @description Checks if a vulnerability type has been marked as false positive
  * @param {Object} vulnerability - Vulnerability to check
  * @param {number} prNumber - Pull request number
- * @returns {boolean} Whether the vulnerability is marked as false positive
+ * @returns {boolean} Whether the vulnerability type is marked as false positive
  */
 function isFalsePositive(vulnerability, prNumber) {
-  // Extract file name from location (e.g., "server.js:15" -> "server.js")
-  const fileMatch = vulnerability.location.match(/^([^:]+)/);
-  if (!fileMatch) return false;
-  const fileName = fileMatch[1];
-
-  // Create a pattern that matches any line number for this file
-  const issueId = `${vulnerability.type} (${fileName}:\\d+)`;
-  const fpKey = `${prNumber}-${issueId}`;
-
-  // Check if any false positive matches this pattern
+  // Check if this vulnerability type has been marked as false positive
   return Array.from(falsePositives.keys()).some((key) => {
-    const keyMatch = key.match(
-      new RegExp(`${prNumber}-${vulnerability.type} \\(${fileName}:\\d+\\)`)
-    );
-    return keyMatch !== null;
+    const typeMatch = key.match(new RegExp(`${prNumber}-([^(]+)`));
+    return typeMatch && typeMatch[1].trim() === vulnerability.type;
   });
 }
 
 /**
  * @async
  * @function handleFalsePositive
- * @description Handles marking a vulnerability as false positive
+ * @description Handles marking a vulnerability type as false positive
  * @param {number} prNumber - Pull request number
  * @param {string} issueId - Vulnerability identifier
  * @param {string} comment - Comment text
@@ -603,15 +592,7 @@ async function handleFalsePositive(prNumber, issueId, comment) {
   const fpConfig = config.getFalsePositiveConfig();
   if (!fpConfig.enabled) return;
 
-  // Extract file name from issueId (e.g., "SQL Injection (server.js:15)" -> "server.js")
-  const fileMatch = issueId.match(/\(([^:]+):\d+\)$/);
-  if (!fileMatch) {
-    logger.warn("Invalid issueId format for false positive:", issueId);
-    return;
-  }
-  const fileName = fileMatch[1];
-
-  // Create a pattern that matches any line number for this file
+  // Extract vulnerability type from issueId (e.g., "SQL Injection (server.js:15)" -> "SQL Injection")
   const typeMatch = issueId.match(/^([^(]+)/);
   if (!typeMatch) {
     logger.warn("Could not extract vulnerability type from issueId:", issueId);
@@ -619,13 +600,14 @@ async function handleFalsePositive(prNumber, issueId, comment) {
   }
   const vulnerabilityType = typeMatch[1].trim();
 
-  const fpKey = `${prNumber}-${vulnerabilityType} (${fileName}:\\d+)`;
+  // Store just the vulnerability type as false positive
+  const fpKey = `${prNumber}-${vulnerabilityType}`;
   falsePositives.set(fpKey, {
     timestamp: Date.now(),
     comment,
   });
 
-  logger.logFalsePositive(prNumber, issueId, comment);
+  logger.logFalsePositive(prNumber, vulnerabilityType, comment);
 }
 
 /**
