@@ -284,6 +284,7 @@ async function analyzeCodeDiff(diff, prNumber) {
       .filter(([_, check]) => check.enabled)
       .map(([name, _]) => name),
     falsePositiveTypes: fpTypes,
+    falsePositiveKeys: Array.from(falsePositives.keys()),
   });
 
   const prompt = `You are a security expert analyzing code for vulnerabilities. Review the following code diff and identify any security issues.
@@ -298,6 +299,7 @@ IMPORTANT: If you detect any of these vulnerability types, you MUST NOT report t
 - The code matches known patterns
 - The severity is critical
 - The vulnerability is in a different location
+- The vulnerability type matches exactly (case-insensitive)
 
 Security Checks to Consider:
 ${Object.entries(securityChecks)
@@ -331,7 +333,8 @@ Requirements:
 - Provide actionable fix suggestions
 - If no vulnerabilities are found, explicitly state that
 - Format the location as "file.js:line" (e.g., "server.js:15")
-- REMEMBER: Do not report ANY vulnerabilities that match the false positive types listed above
+- REMEMBER: Do not report ANY vulnerabilities that match the false positive types listed above, regardless of case
+- If you detect a vulnerability that matches any of the false positive types (case-insensitive), you MUST skip it
 
 Code diff to analyze:
 \`\`\`diff
@@ -581,10 +584,29 @@ function extractField(text, fieldName) {
  * @returns {boolean} Whether the vulnerability type is marked as false positive
  */
 function isFalsePositive(vulnerability, prNumber) {
+  // Debug logging to see what we're checking
+  logger.debug("Checking if vulnerability is false positive:", {
+    vulnerabilityType: vulnerability.type,
+    prNumber,
+    falsePositiveKeys: Array.from(falsePositives.keys()),
+  });
+
   // Check if this vulnerability type has been marked as false positive
   return Array.from(falsePositives.keys()).some((key) => {
     const typeMatch = key.match(new RegExp(`${prNumber}-([^(]+)`));
-    return typeMatch && typeMatch[1].trim() === vulnerability.type;
+    if (!typeMatch) return false;
+
+    const storedType = typeMatch[1].trim();
+    const isMatch =
+      storedType.toLowerCase() === vulnerability.type.toLowerCase();
+
+    logger.debug("False positive check:", {
+      storedType,
+      vulnerabilityType: vulnerability.type,
+      isMatch,
+    });
+
+    return isMatch;
   });
 }
 
@@ -610,6 +632,14 @@ async function handleFalsePositive(prNumber, issueId, comment) {
 
   // Store just the vulnerability type as false positive
   const fpKey = `${prNumber}-${vulnerabilityType}`;
+
+  logger.debug("Storing false positive:", {
+    prNumber,
+    vulnerabilityType,
+    fpKey,
+    issueId,
+  });
+
   falsePositives.set(fpKey, {
     timestamp: Date.now(),
     comment,
