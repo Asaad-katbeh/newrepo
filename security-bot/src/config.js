@@ -175,7 +175,17 @@ class Config {
    * @returns {Object} False positive configuration with default enabled value if not set
    */
   getFalsePositiveConfig() {
-    return this.config.false_positive || { enabled: true };
+    return (
+      this.config.false_positive || {
+        enabled: true,
+        command: "@[Ss]ecurity[Bb]ot false-positive",
+        storage: "comments",
+        expiration: 30,
+        require_approval: true,
+        track_history: true,
+        include_reason: true,
+      }
+    );
   }
 
   /**
