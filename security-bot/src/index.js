@@ -194,9 +194,20 @@ async function loadFalsePositives(prNumber) {
       totalComments: comments.length,
       commandPattern: fpConfig.command,
       regexPattern: commandRegex.toString(),
+      comments: comments.map((c) => ({
+        body: c.body,
+        user: c.user.login,
+        created_at: c.created_at,
+      })),
     });
 
     for (const comment of comments) {
+      logger.debug("Processing comment:", {
+        body: comment.body,
+        user: comment.user.login,
+        created_at: comment.created_at,
+      });
+
       const match = comment.body.match(commandRegex);
       if (match) {
         const issueId = match[1].trim();
@@ -207,11 +218,18 @@ async function loadFalsePositives(prNumber) {
           issueId,
           fpKey,
           user: comment.user.login,
+          match: match[0],
         });
 
         if (fpConfig.require_approval) {
           const { data: user } = await octokit.users.get({
             username: comment.user.login,
+          });
+
+          logger.debug("Checking user permissions:", {
+            username: comment.user.login,
+            isSiteAdmin: user.site_admin,
+            hasOrganizations: !!user.organizations_url,
           });
 
           if (!user.site_admin && !user.organizations_url) {
@@ -229,6 +247,11 @@ async function loadFalsePositives(prNumber) {
         });
 
         logger.logFalsePositive(prNumber, issueId, comment.body);
+      } else {
+        logger.debug("Comment did not match false positive pattern:", {
+          comment: comment.body,
+          pattern: commandRegex.toString(),
+        });
       }
     }
 
