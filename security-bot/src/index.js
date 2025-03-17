@@ -222,7 +222,7 @@ async function loadFalsePositives(prNumber) {
         });
 
         if (fpConfig.require_approval) {
-          const { data: user } = await octokit.users.get({
+          const { data: user } = await octokit.rest.users.getByUsername({
             username: comment.user.login,
           });
 
@@ -290,7 +290,7 @@ async function processNewComments(prNumber) {
         const issueId = match[1].trim();
 
         if (fpConfig.require_approval) {
-          const { data: user } = await octokit.users.get({
+          const { data: user } = await octokit.rest.users.getByUsername({
             username: comment.user.login,
           });
 
