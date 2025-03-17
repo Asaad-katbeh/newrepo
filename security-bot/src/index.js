@@ -178,7 +178,7 @@ async function loadFalsePositives(prNumber) {
       per_page: 100,
     });
 
-    const commandRegex = new RegExp(fpConfig.command + "\\s+(.+)$", "m");
+    const commandRegex = new RegExp(fpConfig.command + "\\s+(.+)$", "mi");
 
     for (const comment of comments) {
       const match = comment.body.match(commandRegex);
@@ -231,7 +231,7 @@ async function processNewComments(prNumber) {
       per_page: 10,
     });
 
-    const commandRegex = new RegExp(fpConfig.command + "\\s+(.+)$", "m");
+    const commandRegex = new RegExp(fpConfig.command + "\\s+(.+)$", "mi");
 
     for (const comment of comments) {
       const match = comment.body.match(commandRegex);

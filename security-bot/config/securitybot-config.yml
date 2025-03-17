@@ -209,7 +209,7 @@ performance:
 # Settings for handling false positive reports
 false_positives:
   enabled: true
-  command: "@securitybot false-positive" # Command to mark false positives
+  command: "@[Ss]ecurity[Bb]ot false-positive" # Case-insensitive command to mark false positives
   storage: "comments" # Where to store false positive data
   expiration: 30 # Days until false positive mark expires
   require_approval: true # Require maintainer approval
