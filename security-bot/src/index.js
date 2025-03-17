@@ -313,6 +313,8 @@ Requirements:
 - Be specific about the location of each vulnerability
 - Provide actionable fix suggestions
 - If no vulnerabilities are found, explicitly state that
+- Do not report vulnerabilities that have been marked as false positives
+- Format the location as "file.js:line" (e.g., "server.js:15")
 
 Code diff to analyze:
 \`\`\`diff
@@ -359,12 +361,19 @@ ${diff}
       prNumber
     );
 
+    // Filter out false positives
+    const filteredVulnerabilities = vulnerabilities.filter(
+      (vuln) => !isFalsePositive(vuln, prNumber)
+    );
+
     logger.info("Completed vulnerability analysis:", {
-      vulnerabilitiesFound: vulnerabilities.length,
-      types: vulnerabilities.map((v) => v.type),
+      vulnerabilitiesFound: filteredVulnerabilities.length,
+      totalVulnerabilities: vulnerabilities.length,
+      falsePositives: vulnerabilities.length - filteredVulnerabilities.length,
+      types: filteredVulnerabilities.map((v) => v.type),
     });
 
-    return vulnerabilities;
+    return filteredVulnerabilities;
   } catch (error) {
     logger.error("Error in analyzeCodeDiff:", {
       error: error.message,
