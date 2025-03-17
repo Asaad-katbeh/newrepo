@@ -555,7 +555,8 @@ function extractField(text, fieldName) {
  * @returns {boolean} Whether the vulnerability is marked as false positive
  */
 function isFalsePositive(vulnerability, prNumber) {
-  const fpKey = `${prNumber}-${vulnerability.type}-${vulnerability.location}`;
+  const issueId = `${vulnerability.type} (${vulnerability.location})`;
+  const fpKey = `${prNumber}-${issueId}`;
   return falsePositives.has(fpKey);
 }
 
