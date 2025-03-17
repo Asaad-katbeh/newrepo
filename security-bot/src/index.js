@@ -304,19 +304,9 @@ Severity: [critical/high/medium/low]
 Confidence score: [0-1]
 OWASP reference: [OWASP ID]
 CWE reference: [CWE ID]
-Location in code: [File path and approximate line number]
-Code context: [2-3 lines of code around the vulnerability]
+Location in code: [File and line numbers]
 Description: [Detailed description of the vulnerability]
 Suggested fix: [Code or description of how to fix]
-
-IMPORTANT FORMATTING RULES:
-1. Location must be in format: "file.js:line" (e.g., "server.js:15")
-2. Code context must be 2-3 lines of code showing the vulnerability
-3. Type must match one of the security check types listed above
-4. Severity must be one of: critical, high, medium, low
-5. Confidence score must be between 0 and 1
-6. OWASP reference must be in format "AXX:YYYY"
-7. CWE reference must be in format "CWE-XXX"
 
 Requirements:
 - Only report vulnerabilities with confidence score >= ${confidenceThreshold}
@@ -324,7 +314,7 @@ Requirements:
 - Provide actionable fix suggestions
 - If no vulnerabilities are found, explicitly state that
 - Do not report vulnerabilities that have been marked as false positives
-- Always include the code context to help identify the vulnerability
+- Format the location as "file.js:line" (e.g., "server.js:15")
 
 Code diff to analyze:
 \`\`\`diff
@@ -407,83 +397,6 @@ ${diff}
 }
 
 /**
- * @function isFalsePositive
- * @description Checks if a vulnerability has been marked as false positive
- * @param {Object} vulnerability - Vulnerability to check
- * @param {number} prNumber - Pull request number
- * @returns {boolean} Whether the vulnerability is marked as false positive
- */
-function isFalsePositive(vulnerability, prNumber) {
-  // Create a more robust identifier using file path and code context
-  const issueId = `${vulnerability.type} (${vulnerability.location})`;
-  const fpKey = `${prNumber}-${issueId}`;
-
-  // Check if we have an exact match
-  if (falsePositives.has(fpKey)) {
-    return true;
-  }
-
-  // If no exact match, try to find a similar vulnerability using code context
-  const filePath = vulnerability.location.split(":")[0];
-  const vulnerabilityContext = vulnerability.codeContext?.trim();
-
-  if (!vulnerabilityContext) {
-    return false; // If we don't have code context, don't try fuzzy matching
-  }
-
-  for (const [key, value] of falsePositives.entries()) {
-    if (key.startsWith(`${prNumber}-${vulnerability.type}`)) {
-      const fpLocation = key.split("(")[1].split(")")[0];
-      const fpFilePath = fpLocation.split(":")[0];
-
-      // Only consider vulnerabilities in the same file
-      if (fpFilePath === filePath) {
-        // If we have code context for the false positive, compare it
-        if (value.codeContext) {
-          const fpContext = value.codeContext.trim();
-
-          // Check if the code contexts are similar enough
-          // This is a simple check - we could make it more sophisticated if needed
-          if (fpContext === vulnerabilityContext) {
-            return true;
-          }
-        }
-      }
-    }
-  }
-
-  return false;
-}
-
-/**
- * @async
- * @function handleFalsePositive
- * @description Handles marking a vulnerability as false positive
- * @param {number} prNumber - Pull request number
- * @param {string} issueId - Vulnerability identifier
- * @param {string} comment - Comment text
- */
-async function handleFalsePositive(prNumber, issueId, comment) {
-  const fpConfig = config.getFalsePositiveConfig();
-  if (!fpConfig.enabled) return;
-
-  const fpKey = `${prNumber}-${issueId}`;
-
-  // Extract the code context from the comment if available
-  const codeContextMatch = comment.match(/```\n([\s\S]+?)\n```/);
-  const codeContext = codeContextMatch ? codeContextMatch[1].trim() : null;
-
-  falsePositives.set(fpKey, {
-    timestamp: Date.now(),
-    comment,
-    filePath: issueId.split("(")[1].split(":")[0].trim(),
-    codeContext, // Store the code context for better matching
-  });
-
-  logger.logFalsePositive(prNumber, issueId, comment);
-}
-
-/**
  * @function parseVulnerabilities
  * @description Parses AI analysis response into vulnerability objects
  * @param {string} aiResponse - Raw analysis text from AI
@@ -534,7 +447,6 @@ function parseVulnerabilities(aiResponse, prNumber) {
         owaspRef: extractField(section, "OWASP reference"),
         cweRef: extractField(section, "CWE reference"),
         location: extractField(section, "Location in code"),
-        codeContext: extractField(section, "Code context"), // Add code context
         description: extractField(section, "Description"),
         suggestedFix: extractField(section, "Suggested fix"),
       };
@@ -543,14 +455,12 @@ function parseVulnerabilities(aiResponse, prNumber) {
       if (
         !vulnerability.type ||
         !vulnerability.severity ||
-        isNaN(vulnerability.confidence) ||
-        !vulnerability.codeContext // Require code context
+        isNaN(vulnerability.confidence)
       ) {
         logger.warn("Skipping vulnerability due to missing required fields", {
           type: !!vulnerability.type,
           severity: !!vulnerability.severity,
           confidence: !isNaN(vulnerability.confidence),
-          codeContext: !!vulnerability.codeContext,
           section,
         });
         continue;
@@ -582,8 +492,6 @@ function parseVulnerabilities(aiResponse, prNumber) {
         type: vulnerability.type,
         severity: vulnerability.severity,
         confidence: vulnerability.confidence,
-        location: vulnerability.location,
-        codeContext: vulnerability.codeContext,
       });
     } catch (error) {
       logger.error("Error parsing vulnerability section:", {
@@ -646,6 +554,40 @@ function extractField(text, fieldName) {
     textPreview: text.substring(0, 100) + "...",
   });
   return null;
+}
+
+/**
+ * @function isFalsePositive
+ * @description Checks if a vulnerability has been marked as false positive
+ * @param {Object} vulnerability - Vulnerability to check
+ * @param {number} prNumber - Pull request number
+ * @returns {boolean} Whether the vulnerability is marked as false positive
+ */
+function isFalsePositive(vulnerability, prNumber) {
+  const issueId = `${vulnerability.type} (${vulnerability.location})`;
+  const fpKey = `${prNumber}-${issueId}`;
+  return falsePositives.has(fpKey);
+}
+
+/**
+ * @async
+ * @function handleFalsePositive
+ * @description Handles marking a vulnerability as false positive
+ * @param {number} prNumber - Pull request number
+ * @param {string} issueId - Vulnerability identifier
+ * @param {string} comment - Comment text
+ */
+async function handleFalsePositive(prNumber, issueId, comment) {
+  const fpConfig = config.getFalsePositiveConfig();
+  if (!fpConfig.enabled) return;
+
+  const fpKey = `${prNumber}-${issueId}`;
+  falsePositives.set(fpKey, {
+    timestamp: Date.now(),
+    comment,
+  });
+
+  logger.logFalsePositive(prNumber, issueId, comment);
 }
 
 /**
@@ -755,9 +697,6 @@ function generateComment(vulnerabilities) {
     for (const vuln of vulns) {
       comment += `#### ${vuln.type || "Unknown Vulnerability Type"}\n`;
       comment += `- **Location:** ${vuln.location || "Unknown"}\n`;
-      if (vuln.codeContext) {
-        comment += `- **Code Context:**\n\`\`\`\n${vuln.codeContext}\n\`\`\`\n`;
-      }
       comment += `- **Confidence:** ${
         typeof vuln.confidence === "number"
           ? (vuln.confidence * 100).toFixed(1)
