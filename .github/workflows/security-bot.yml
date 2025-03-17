@@ -69,7 +69,7 @@ jobs:
           GITHUB_ACTIONS: true
           PR_NUMBER: ${{ github.event.pull_request.number }}
           CONFIG_PATH: config/securitybot-config.yml
-        continue-on-error: true # Don't fail the workflow if security issues are found
+        continue-on-error: false # Fail the workflow if security issues are found
 
       # Step 5: Report analysis results using checks API instead of statuses
       - name: Report status
@@ -77,44 +77,21 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const { owner, repo, issue_number } = context.issue;
-            const status = context.job.status;
-
-            try {
-              // Create a check run for the analysis results
-              await github.rest.checks.create({
-                owner,
-                repo,
-                name: 'Security Review Bot',
-                head_sha: context.sha,
-                status: 'completed',
-                conclusion: status === 'success' ? 'success' : 'failure',
-                output: {
-                  title: status === 'success' ? 'Security Review Passed' : 'Security Review Failed',
-                  summary: status === 'success' 
-                    ? 'Security review completed successfully. No issues were found.'
-                    : 'Security review failed. Check the logs for details.'
-                }
-              });
-
-              // Add a summary comment to the PR
-              if (issue_number) {
-                const message = status === 'success'
-                  ? '## ✅ Security Review Completed\n\nSecurity review completed successfully. No issues were found.'
-                  : '## ❌ Security Review Failed\n\nSecurity review failed. Please check the [workflow logs](' + 
-                    `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}) for details.`;
-                
-                await github.rest.issues.createComment({
-                  owner,
-                  repo,
-                  issue_number,
-                  body: message
-                });
+            const conclusion = process.env.GITHUB_STEP_SUMMARY.includes('Security vulnerabilities detected') ? 'failure' : 'success';
+            const { data: checkRun } = await github.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: 'Security Review',
+              head_sha: context.sha,
+              status: 'completed',
+              conclusion: conclusion,
+              output: {
+                title: 'Security Review Results',
+                summary: conclusion === 'success'
+                  ? '✅ No security vulnerabilities found.'
+                  : '❌ Security vulnerabilities detected. Please review the findings.'
               }
-            } catch (error) {
-              console.error('Error creating check:', error);
-              core.setFailed(`Failed to create check: ${error.message}`);
-            }
+            });
 
       # Step 6: Save log files as artifacts
       - name: Upload logs
