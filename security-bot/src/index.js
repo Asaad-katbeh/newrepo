@@ -595,39 +595,31 @@ async function postComment(prNumber, vulnerabilities) {
 
   let body;
   if (vulnerabilities.length === 0) {
-    body =
-      `## Security Review Results
+    body = `## Security Review Results
 
 ✅ No security vulnerabilities were detected in this pull request.
 
 ### Analysis Details
 - Analyzed PR: #${prNumber}
 - Security Checks Run: ${Object.entries(config.getSecurityChecks())
-        .filter(([_, check]) => check.enabled)
-        .map(([name, _]) => name)
-        .join(", ")}
+      .filter(([_, check]) => check.enabled)
+      .map(([name, _]) => name)
+      .join(", ")}
 - Confidence Threshold: ${(config.getConfidenceThreshold() * 100).toFixed(0)}%
 
 If you believe this is incorrect or would like to mark any future findings as false positives, you can comment with:
 \`\`\`
-@securitybot false-positive <Type> (<file>:<line>)
+@securitybot false-positive "Vulnerability Type" (file.js:line)
 \`\`\`
-Replace ` <
-      Type >
-      ` with the vulnerability type, ` <
-      file >
-      ` with the file name, and ` <
-      line >
-      ` with the line number.
-
-For example:\n\`\`\`
+For example:
+\`\`\`
 @securitybot false-positive SQL Injection (server.js:15)
 \`\`\`
-Make sure to:\n
-- Use the exact vulnerability type as shown above\n
-- Include the parentheses around the location\n
-- Use the colon between file and line number\n
-- Keep the space between type and location\n`;
+Make sure to:
+- Use the exact vulnerability type as shown above
+- Include the parentheses around the location
+- Use the colon between file and line number
+- Keep the space between type and location`;
   } else {
     body = generateComment(vulnerabilities);
   }
@@ -714,7 +706,8 @@ function generateComment(vulnerabilities) {
 
   comment += "\n---\n\n";
   comment += "To mark a vulnerability as false positive, comment with:\n";
-  comment += "```\n@securitybot false-positive <Type> (<file>:<line>)\n```\n";
+  comment +=
+    '```\n@securitybot false-positive "Vulnerability Type" (file.js:line)\n```\n';
   comment += "For example:\n";
   comment +=
     "```\n@securitybot false-positive SQL Injection (server.js:15)\n```\n";
